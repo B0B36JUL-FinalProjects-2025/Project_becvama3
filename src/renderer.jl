@@ -9,11 +9,14 @@ function prepare_glmakie()
     GLMakie.closeall()
 end
 
-function prepare_render(points::Observable)
-    fig = Figure()
-    ax = LScene(fig[1, 1], show_axis=false, scenekw = (backgroundcolor = :white, clear=true))
+function prepare_render(bodies::Observable)
+    fig = Figure(backgroundcolor = :gray20)
+    ax = LScene(fig[1, 1], show_axis=false, scenekw = (backgroundcolor = :gray20, clear=true))
 
-    scatter!(ax, points; markersize=10)
+    pos = @lift([Point3f(body.pos) for body in $(bodies)]) 
+    sizes = @lift([body.size for body in $(bodies)])
+
+    scatter!(ax, pos; markersize=sizes, color=:white)
 
     display(fig)
     return fig

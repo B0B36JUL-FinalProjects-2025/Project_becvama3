@@ -14,20 +14,22 @@ export main
 function main()
     prepare_glmakie()
 
-    # points = Observable(Point3f[])
-    # prepare_render(points)
-
-    # points[] = [(0,0,0), (1,1,1)]
-
     bodies = Observable([
-        PhysicsBody(@SVector[0f0, 0f0, 0f0], @SVector[0f0, 0f0, 0f0], 1f0, 5f0),
-        PhysicsBody(@SVector[1f0, 0f0, 0f0], @SVector[0f0, 0f0, 0f0], 1f0, 3f0),
+        PhysicsBody(@SVector[0f0, 0f0, 0f0], @SVector[0f0, 2f0, 0f0], 10f0, 50f0),
+        PhysicsBody(@SVector[1f0, 0f0, 0f0], @SVector[0f0,-2f0, 0f0], 10f0, 50f0),
     ])
 
-    pos = @lift([Point3f(body.pos) for body in $(bodies)]) 
-    sizes = @lift([body.size for body in $(bodies)])
+    fig = prepare_render(bodies)
 
-    return bodies, pos
+    dt = 0.016f0
+
+    while isopen(fig.scene)
+        step!(bodies[], dt)
+        notify(bodies)
+        sleep(dt)
+    end
+
+    return bodies
 end
 
 end
