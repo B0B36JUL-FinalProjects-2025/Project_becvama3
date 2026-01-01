@@ -3,7 +3,7 @@ module Renderer
 using GLMakie
 using StaticArrays
 
-using ..Simulator: PhysicsBody, reset!   # ← THIS is the key line
+using ..Simulator: PhysicsBody, reset!
 
 export prepare_glmakie, prepare_render
 
@@ -17,13 +17,14 @@ function prepare_glmakie()
     GLMakie.closeall()
 end
 
-function prepare_render(bodies::Observable)
+function prepare_render(bodies::Observable, trajectories::Observable)
     fig = Figure(backgroundcolor = :gray20)
     ax = LScene(fig[1, 1], show_axis=false, scenekw = (backgroundcolor = :gray20, clear=true))
     grid = GridLayout(fig[2,1]; tellwidth=false) 
 
-    uielements = uiRenderer(grid, bodies)
+    uielements = uiRenderer(grid, bodies, trajectories)
     bodyRenderer(fig, ax, bodies, uielements)
+    proxyRenderer(ax, trajectories)
     wireframeRenderer(fig, ax, bodies, uielements)
 
     display(fig)
@@ -121,7 +122,7 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, bodies::Observabl
 
 end
 
-function uiRenderer(grid::GridLayout, bodies::Observable)
+function uiRenderer(grid::GridLayout, bodies::Observable, trajectories::Observable)
     selected_index = Observable(1)
 
     bodyCount = @lift(length($bodies))
@@ -137,11 +138,18 @@ function uiRenderer(grid::GridLayout, bodies::Observable)
     # colsize!(btn_grid, 1, Auto())
     # colsize!(btn_grid, 2, Auto())
 
+
     bAdd    = Button(btn_grid[1, 1], label = "+", labelcolor=:white, font=:bold, buttoncolor = RGBAf(0,1,0, 0.5))
     bRemove = Button(btn_grid[1, 2], label = "-", labelcolor=:white, font=:bold, buttoncolor = RGBAf(1,0,0, 0.8))
 
     on(bAdd.clicks) do click 
         push!(bodies[], PhysicsBody(@SVector[0f0, 0f0, 0f0], @SVector[0f0,0f0,0f0], 1f0))
+        reset!(bodies[])
+
+        n = length(bodies[])
+        new_trajs = [Point3f[] for _ in 1:n]
+        trajectories[] = new_trajs
+
         notify(bodies)
     end
     on(bRemove.clicks) do click 
@@ -149,6 +157,12 @@ function uiRenderer(grid::GridLayout, bodies::Observable)
         isnothing(menu.selection[]) && return nothing
 
         deleteat!(bodies[], selected_index[])
+        reset!(bodies[])
+
+        n = length(bodies[])
+        new_trajs = [Point3f[] for _ in 1:n]
+        trajectories[] = new_trajs
+
         notify(bodies)
     end
 
@@ -189,6 +203,26 @@ function bodyRenderer(fig::Figure, ax::LScene, bodies::Observable, uielements::U
         markersize = sizes,
         color = :white,
         shading = true
+    )
+end
+
+function proxyRenderer(ax::LScene, trajectories::Observable)
+    scene_trajectories = lift(trajectories) do trajs
+        points = Point3f[]
+        for t in trajs
+            append!(points, t)
+            push!(points, Point3f(NaN, NaN, NaN))
+        end
+        return points
+    end
+
+    # We pass the Observable 'scene_trajectories' to lines!
+    lines!(
+        ax,
+        scene_trajectories;
+        color = (:white, 0.3),
+        linewidth = 1,
+        transparency = true # Helpful for 3D rendering
     )
 end
 

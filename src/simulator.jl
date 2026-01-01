@@ -1,8 +1,9 @@
 module Simulator
 
 using StaticArrays
+using GLMakie
 
-export PhysicsBody, step!, reset!
+export PhysicsBody, step!, reset!, recompute_trajectories!
 
 mutable struct PhysicsBody
     startPos::SVector{3, Float32}
@@ -58,4 +59,20 @@ function step!(bodies::Vector{PhysicsBody}, dt::Float32)
     bodies .= _bodies
 end
 
+function recompute_trajectories!(bodies, trajectories; dt, steps)
+    test_bodies = deepcopy(bodies)
+
+    for traj in trajectories
+        empty!(traj)
+    end
+
+    for _ in 1:steps
+        step!(test_bodies, dt)
+        for i in eachindex(test_bodies)
+            push!(to_value(trajectories)[i], Point3f(test_bodies[i].pos))
+        end
+    end
 end
+
+end
+
