@@ -2,6 +2,7 @@ module Simulator
 
 using StaticArrays
 using GLMakie
+using Colors
 
 export PhysicsBody, step!, reset!, recompute_trajectories!
 
@@ -11,13 +12,14 @@ mutable struct PhysicsBody
     pos::SVector{3, Float32}
     vel::SVector{3, Float32}
     mass::Float32
+    color::RGBf
 
-    function PhysicsBody(startPos::SVector{3, Float32}, startVel::SVector{3, Float32}, mass::Float32)
-        new(startPos, startVel, startPos, startVel, mass)
+    function PhysicsBody(startPos::SVector{3, Float32}, startVel::SVector{3, Float32}, mass::Float32, color=RGBf(rand(), rand(), rand()))
+        new(startPos, startVel, startPos, startVel, mass, color)
     end
 
     function PhysicsBody(orig::PhysicsBody, new_pos::SVector{3, Float32}, new_vel::SVector{3, Float32})
-        new(orig.startPos, orig.startVel, new_pos, new_vel, orig.mass)
+        new(orig.startPos, orig.startVel, new_pos, new_vel, orig.mass, orig.color)
     end
 end
 
@@ -30,7 +32,7 @@ function reset!(bodies::Vector{PhysicsBody})
     end
 end
 
-function step!(bodies::Vector{PhysicsBody}, dt::Float32)
+function step!(bodies::Vector{PhysicsBody}, trails::Union{Vector{Vector{Point3f}}, Nothing}, dt::Float32, frame::UInt64)
     _bodies = similar(bodies)
 
     for i in eachindex(bodies)
@@ -55,11 +57,21 @@ function step!(bodies::Vector{PhysicsBody}, dt::Float32)
         _bodies[i] = PhysicsBody(bi, pos, vel)
     end
 
-    # UPDATE old ones with new ones
     bodies .= _bodies
+
+    isnothing(trails) && return
+    frame % 10 != 0 && return # Trail only on limited number of steps
+
+    for (i, b) in enumerate(bodies)
+        push!(trails[i], Point3f(b.pos))
+
+        if length(trails[i]) > 500
+            popfirst!(trails[i])
+        end
+    end
 end
 
-function recompute_trajectories!(bodies, trajectories; dt, steps)
+function recompute_trajectories!(bodies, trajectories; dt, steps=1000)
     test_bodies = deepcopy(bodies)
 
     for traj in trajectories
@@ -67,7 +79,7 @@ function recompute_trajectories!(bodies, trajectories; dt, steps)
     end
 
     for _ in 1:steps
-        step!(test_bodies, dt)
+        step!(test_bodies, nothing, dt, UInt64(0))
         for i in eachindex(test_bodies)
             push!(to_value(trajectories)[i], Point3f(test_bodies[i].pos))
         end
