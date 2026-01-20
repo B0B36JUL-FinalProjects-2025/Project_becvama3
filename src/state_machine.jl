@@ -6,7 +6,7 @@ using StaticArrays
 
 using GLMakie
 
-export AppState, prepare_listeners!
+export AppState
 
 mutable struct AppState
     playing::Observable{Bool}
@@ -17,24 +17,24 @@ mutable struct AppState
     trajectories::Observable{Vector{Vector{Point3f}}}
 
     selected_body_index::Observable{Int}
+    centered_body_index::Observable{Int}
 
     dt::Float32
     frame::UInt64
 
-    function AppState(;playing::Bool=false, dt::Float32=0.016f0)
-        _playing = Observable(playing)
-        _bodies = Observable([
-            PhysicsBody(@SVector[0f0, 0f0, 0f0], 
-                        @SVector[0f0, 0f0, 0f0], 
-                        1f0, 
-                        RGBf(rand(), rand(), rand()))
-        ])
+    function AppState(;init_bodies::Vector{PhysicsBody}, dt::Float32=0.016f0)
+        _playing = Observable(false)
+        _bodies = Observable(init_bodies)
         _trails       = Observable([Point3f[] for _ in _bodies[]])
         _trajectories = Observable([Point3f[] for _ in _bodies[]])
 
-        _idx = Observable(0)
+        s_idx = Observable(0)
+        c_idx = Observable(0)
 
-        new(_playing, _bodies, _trails, _trajectories, _idx, dt, 0)
+        state = new(_playing, _bodies, _trails, _trajectories, s_idx, c_idx, dt, 0)
+
+        prepare_listeners!(state)
+        return state
     end
 
 end

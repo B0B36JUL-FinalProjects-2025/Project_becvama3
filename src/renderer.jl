@@ -7,7 +7,7 @@ using StaticArrays
 using ..Simulator: PhysicsBody, reset!
 using ..StateMachine: AppState
 
-export prepare_glmakie, prepare_render
+export prepare_glmakie, prepare_renderer
 
 struct UIElements
     cb_wireframe::Toggle
@@ -19,7 +19,7 @@ function prepare_glmakie()
     GLMakie.closeall()
 end
 
-function prepare_render(state::AppState)
+function prepare_renderer(state::AppState)
     fig = Figure(backgroundcolor = :gray20)
     ax = LScene(fig[1, 1], show_axis=false, scenekw = (backgroundcolor = :gray20, clear=true))
     grid = GridLayout(fig[2,1]; tellwidth=false) 
@@ -49,6 +49,9 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
     Label(inspector_grid[3, 1], "Mass")
     sl_mass = Slider(inspector_grid[3, 2], range=1f0:1f0:100f0, width=250, tellwidth=false)
 
+    Label(inspector_grid[4, 1], "Centered")
+    toggle_centered = Toggle(inspector_grid[4,2], active=false, halign=:right, tellwidth=false)
+
     on(state.selected_body_index) do idx
         if !checkbounds(Bool, state.bodies[], idx)
             swatch_color[] = RGBAf(0,0,0,0)
@@ -56,7 +59,6 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
         end
 
         b = state.bodies[][idx]
-        c = state.bodies[][idx].color
 
         set_close_to!(sl_xpos, b.startPos[1])
         set_close_to!(sl_ypos, b.startPos[2])
@@ -64,12 +66,39 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
         set_close_to!(sl_yvel, b.startVel[2])
         set_close_to!(sl_mass, b.mass)
 
-        swatch_color[] = c
+        toggle_centered.active[] = b.center
+        swatch_color[] = b.color
+
+        @show b
+    end
+
+    on(toggle_centered.active) do centered 
+        idx = state.selected_body_index[]
+        !checkbounds(Bool, state.bodies[], idx) && return nothing
+
+        @show centered
+        if centered # if switched ON
+            # reset all bodies (de-centering some previously centered body)
+            for b in eachindex(state.bodies[])
+                state.bodies[][b].center = false
+            end
+
+            # center selcted one
+            state.bodies[][idx].center = true
+            state.centered_body_index[] = idx
+        elseif state.bodies[][idx].center # if switched OFF
+            state.bodies[][idx].center = false
+            state.centered_body_index[] = 0
+        end
+
+        notify(state.bodies)
     end
 
     function update_body_param(f)
         idx = state.selected_body_index[]
         !checkbounds(Bool, state.bodies[], idx) && return nothing
+
+        state.playing[] = false
 
         f(state.bodies[][idx]) 
         reset!(state.bodies[]) 
@@ -111,6 +140,8 @@ function uiRenderer(grid::GridLayout, state::AppState)
             return 
         end
 
+        state.playing[] = false
+
         idx = parse(Int, selection)
         state.selected_body_index[] = idx
     end
@@ -124,8 +155,7 @@ function uiRenderer(grid::GridLayout, state::AppState)
         push!(state.bodies[], 
               PhysicsBody(@SVector[0f0, 0f0, 0f0], 
                           @SVector[0f0, 0f0, 0f0], 
-                          1f0, 
-                          RGBf(rand(), rand(), rand()))
+                          1f0)
              )
 
         reset!(state.bodies[])
@@ -165,8 +195,41 @@ function uiRenderer(grid::GridLayout, state::AppState)
     return UIElements(toggle_wireframe, sl_wireframe)
 end
 
+
+function _get_center_pos(bodies::Vector{PhysicsBody}, c_idx::Int)
+    """
+        Method for finding the centered body to get the offset vector for rendering others
+    """
+    center_pos = if checkbounds(Bool, bodies, c_idx)
+        Point3f(bodies[c_idx].pos)
+    else
+        Point3f(0)
+    end
+
+    return center_pos
+end
+
+function _get_reference_trail(trails::Vector{Vector{Point3f}}, c_idx::Int)
+    """
+        Method for finding the reference trail to get the offset vector for rendering
+    """
+    ref_trail = if checkbounds(Bool, trails, c_idx)
+        trails[c_idx]
+    else
+        nothing
+    end
+
+    return ref_trail
+end
+
 function bodyRenderer(ax::LScene, state::AppState)
-    pos = @lift([Point3f(body.pos) for body in $(state.bodies)]) 
+    pos = lift(state.bodies) do bodies 
+        center_pos = _get_center_pos(bodies, state.centered_body_index[])
+        
+        return [Point3f(body.pos) - center_pos for body in bodies]
+    end
+
+    # pos = @lift([Point3f(body.pos) for body in $(state.bodies)]) 
 
     power::Float32 = 1/3
     sizes = @lift([body.mass^power for body in $(state.bodies)])
@@ -189,9 +252,11 @@ function bodyRenderer(ax::LScene, state::AppState)
         if playing || !checkbounds(Bool, bodies, idx)
             return Sphere(Point3f(0), 0f0)
         end
+        center_pos = _get_center_pos(bodies, state.centered_body_index[])
+
         b = bodies[idx]
         
-        pos = Point3f(b.pos)
+        pos = Point3f(b.pos) - center_pos
         size = b.mass^power * 1.05f0 
 
         return Sphere(pos, size)
@@ -204,12 +269,23 @@ function proxyRenderer(ax::LScene, state::AppState)
     """
         Forward preview renderer
     """
-    scene_trajectories = lift(state.trajectories) do trajs
+    scene_trajectories = lift(state.trajectories, state.centered_body_index) do trajs, c_idx
         points = Point3f[]
+
+        ref_traj = _get_reference_trail(trajs, c_idx)
+
         for t in trajs
-            append!(points, t)
-            # To split different proxies of different bodies
-            push!(points, Point3f(NaN,NaN,NaN))
+            for i in eachindex(t)
+                pt = t[i]
+                if !isnothing(ref_traj)
+                    pt -= ref_traj[i]
+                end
+                
+                push!(points, pt)
+            end
+
+            # Split separate bodies with NaN
+            push!(points, Point3f(NaN, NaN, NaN))
         end
         return points
     end
@@ -249,10 +325,12 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
             return zbuf
         end
 
+        center_pos = _get_center_pos(bodies, state.centered_body_index[])
+
         for b in bodies
             for j in eachindex(y), i in eachindex(x)
-                dx = x[i] - b.pos[1]
-                dy = y[j] - b.pos[2]
+                dx = x[i] - (b.pos[1] - center_pos[1])
+                dy = y[j] - (b.pos[2] - center_pos[2])
                 dist2 = max(dx*dx + dy*dy, 1e-4)
 
                 # Grav potential
@@ -261,7 +339,7 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
         end
         
         zbuf *= 1 # This needs to be here for some reason
-        zbuf .= clamp.(zbuf, -30f0, -1f0)
+        zbuf .= clamp.(zbuf, -20f0, -1f0)
         return zbuf
     end
 
@@ -273,33 +351,38 @@ function trailRenderer(ax::LScene, state::AppState)
         Trail renderer showing the trajectory of the body with its own color
     """
 
-    scene_data = lift(state.trails, state.bodies) do current_trails, current_bodies
+    scene_data = lift(state.trails, state.bodies, state.centered_body_index) do trails, bodies, c_idx
         points = Point3f[]
         colors = RGBAf[]
 
-        for (i, t) in enumerate(current_trails)
-                n_points = length(t)
-                if n_points == 0; continue; end
+        ref_traj = _get_reference_trail(trails, c_idx)
 
-                base_c = current_bodies[i].color
-                r, g, b = Colors.red(base_c), Colors.green(base_c), Colors.blue(base_c)
+        for (i, t) in enumerate(trails)
+            n_points = length(t)
+            if n_points == 0; continue; end
 
-                for (j, point) in enumerate(t)
-                    alpha = max(Float32(j) / Float32(n_points), 0.01)
+            r, g, b = Colors.red(bodies[i].color), Colors.green(bodies[i].color), Colors.blue(bodies[i].color)
 
-                    vertex_color = RGBAf(r, g, b, alpha)
+            for j in reverse(eachindex(t))
+                pt = t[j]
 
-                    push!(points, point)
-                    push!(colors, vertex_color)
+                if !isnothing(ref_traj)
+                    pt -= ref_traj[j]
                 end
 
-                # Add NaN break to separate this line from the next body's line
-                push!(points, Point3f(NaN))
-                # The color at the NaN point doesn't matter, just needs to match type
-                push!(colors, RGBAf(0,0,0,0)) 
+                alpha = max(Float32(j) / Float32(n_points), 0.01)
+                vertex_color = RGBAf(r, g, b, alpha)
+
+                push!(points, pt)
+                push!(colors, vertex_color)
             end
-            return (points, colors)
+
+            # NaN break to separate different bodies lines 
+            push!(points, Point3f(NaN))
+            push!(colors, RGBAf(0,0,0,0)) 
         end
+        return (points, colors)
+    end
 
     P = @lift($scene_data[1])
     C = @lift($scene_data[2])

@@ -13,13 +13,26 @@ mutable struct PhysicsBody
     vel::SVector{3, Float32}
     mass::Float32
     color::RGBf
+    center::Bool
 
-    function PhysicsBody(startPos::SVector{3, Float32}, startVel::SVector{3, Float32}, mass::Float32, color=RGBf(rand(), rand(), rand()))
-        new(startPos, startVel, startPos, startVel, mass, color)
+    function PhysicsBody(startPos::SVector{3, Float32}, startVel::SVector{3, Float32}, mass::Float32)
+        new(startPos, 
+            startVel, 
+            startPos, 
+            startVel, 
+            mass, 
+            RGBf(rand(), rand(), rand()), 
+            false)
     end
 
     function PhysicsBody(orig::PhysicsBody, new_pos::SVector{3, Float32}, new_vel::SVector{3, Float32})
-        new(orig.startPos, orig.startVel, new_pos, new_vel, orig.mass, orig.color)
+        new(orig.startPos, 
+            orig.startVel, 
+            new_pos, 
+            new_vel, 
+            orig.mass, 
+            orig.color,
+            orig.center)
     end
 end
 
