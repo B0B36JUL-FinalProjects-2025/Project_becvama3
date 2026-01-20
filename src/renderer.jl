@@ -34,7 +34,7 @@ function prepare_render(state::AppState)
     return fig
 end
 
-function bodyInspector(menu::Menu, inspector_grid::GridLayout, bodies::Observable, selected_index::Observable, swatch_color::Observable)
+function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, swatch_color::Observable)
 
     inspector_grid.halign = :left
 
@@ -49,9 +49,14 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, bodies::Observabl
     Label(inspector_grid[3, 1], "Mass")
     sl_mass = Slider(inspector_grid[3, 2], range=1f0:1f0:100f0, width=250, tellwidth=false)
 
-    on(selected_index) do idx
-        b = bodies[][idx]
-        c = bodies[][idx].color
+    on(state.selected_body_index) do idx
+        if !checkbounds(Bool, state.bodies[], idx)
+            swatch_color[] = RGBAf(0,0,0,0)
+            return nothing
+        end
+
+        b = state.bodies[][idx]
+        c = state.bodies[][idx].color
 
         set_close_to!(sl_xpos, b.startPos[1])
         set_close_to!(sl_ypos, b.startPos[2])
@@ -63,13 +68,12 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, bodies::Observabl
     end
 
     function update_body_param(f)
-        isnothing(menu.selection[]) && return
+        idx = state.selected_body_index[]
+        !checkbounds(Bool, state.bodies[], idx) && return nothing
 
-        idx = selected_index[]
-
-        f(bodies[][idx]) 
-        reset!(bodies[]) 
-        notify(bodies)   
+        f(state.bodies[][idx]) 
+        reset!(state.bodies[]) 
+        notify(state.bodies)   
     end
 
     on(sl_xpos.value) do p; update_body_param(b -> b.startPos = @SVector[p, b.startPos[2], b.startPos[3]]) end
@@ -80,10 +84,14 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, bodies::Observabl
 end
 
 function uiRenderer(grid::GridLayout, state::AppState)
-    selected_index = Observable(0)
+    body_count = Observable(length(state.bodies[]))
+    on(state.bodies) do bodies
+        if body_count[] != length(bodies)
+            body_count[] = length(bodies)
+        end
+    end
 
-    bodyCount = @lift(length($(state.bodies)))
-    bodyOptions = @lift([string(i) for i in 1:$bodyCount])
+    bodyOptions = @lift([string(i) for i in 1:$body_count])
 
     menu_row = GridLayout(tellwidth=false, halign=:left)
     grid[1,1] = menu_row
@@ -95,10 +103,24 @@ function uiRenderer(grid::GridLayout, state::AppState)
     btn_grid = GridLayout(tellwidth=false, halign=:left)
     menu_row[1, 3] = btn_grid
 
+    # When menu changes, update our index
+    on(menu.selection) do selection
+        @show selection
+        if isnothing(selection) 
+            state.selected_body_index[] = 0
+            return 
+        end
+
+        idx = parse(Int, selection)
+        state.selected_body_index[] = idx
+    end
+
     bAdd    = Button(btn_grid[1, 1], label = "+", labelcolor=:white, font=:bold, buttoncolor = RGBAf(0,1,0, 0.5))
     bRemove = Button(btn_grid[1, 2], label = "-", labelcolor=:white, font=:bold, buttoncolor = RGBAf(1,0,0, 0.8))
 
     on(bAdd.clicks) do click 
+        state.playing[] = false
+
         push!(state.bodies[], 
               PhysicsBody(@SVector[0f0, 0f0, 0f0], 
                           @SVector[0f0, 0f0, 0f0], 
@@ -107,34 +129,32 @@ function uiRenderer(grid::GridLayout, state::AppState)
              )
 
         reset!(state.bodies[])
-
         notify(state.bodies)
     end
     on(bRemove.clicks) do click 
         isempty(state.bodies[]) && return nothing
-        isnothing(menu.selection[]) && return nothing
 
-        deleteat!(state.bodies[], selected_index[])
+        idx = state.selected_body_index[]
+        !checkbounds(Bool, state.bodies[], idx) && return nothing
+
+        state.playing[] = false
+        deleteat!(state.bodies[], idx)
         reset!(state.bodies[])
 
+        menu.selection[] = nothing
+
         notify(state.bodies)
-    end
 
-    # When menu changes, update our index
-    on(menu.selection) do selection
-        if isnothing(selection) 
-            swatch_color[] = RGBAf(0,0,0,0)
-            return nothing
-        end
-
-        idx = parse(Int, selection)
-        selected_index[] = idx
+        # RESELECT on remove is kinda iffy - choosing to discard selecion on remove
+        # if !isempty(state.bodies[]) 
+        #     menu.selection[] = "1"
+        # end
     end
 
     Box(grid[2, 1:2], color = :gray) 
     inspector_grid = GridLayout(grid[2, 1:2], tellwidth=false)
 
-    bodyInspector(menu, inspector_grid, state.bodies, selected_index, swatch_color)
+    bodyInspector(menu, inspector_grid, state, swatch_color)
 
     toggle_wireframe = Toggle(grid[3,1], active=true, halign=:right, tellwidth=false)
     Label(grid[3,2], "Show Gravitational Potential", halign=:left, tellwidth=false)
@@ -154,7 +174,7 @@ function bodyRenderer(ax::LScene, state::AppState)
     body_colors = @lift([body.color for body in $(state.bodies)])
 
     sphere = Sphere(Point3f(0), 1f0)
-
+    
     meshscatter!(
         ax,
         pos;
@@ -163,9 +183,27 @@ function bodyRenderer(ax::LScene, state::AppState)
         color = body_colors,
         shading = true
     )
+
+    # highlight the selected body
+    selection_geometry = lift(state.playing, state.bodies, state.selected_body_index) do playing, bodies, idx
+        if playing || !checkbounds(Bool, bodies, idx)
+            return Sphere(Point3f(0), 0f0)
+        end
+        b = bodies[idx]
+        
+        pos = Point3f(b.pos)
+        size = b.mass^power * 1.05f0 
+
+        return Sphere(pos, size)
+    end
+
+    wireframe!(ax, selection_geometry; color=:red, linewidth=1, alpha=0.2)
 end
 
 function proxyRenderer(ax::LScene, state::AppState)
+    """
+        Forward preview renderer
+    """
     scene_trajectories = lift(state.trajectories) do trajs
         points = Point3f[]
         for t in trajs
@@ -197,7 +235,6 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
     wireframe_enabled = uielements.cb_wireframe.active
     slider = uielements.sl_wireframe.value
 
-
     grid_geom = lift(slider) do step
         x, y, z = create_grid(step)
         return (x,y,z)
@@ -223,8 +260,8 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
             end
         end
         
-        clamp
-        zbuf *= 1
+        zbuf *= 1 # This needs to be here for some reason
+        zbuf .= clamp.(zbuf, -30f0, -1f0)
         return zbuf
     end
 
@@ -232,7 +269,10 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
 end
 
 function trailRenderer(ax::LScene, state::AppState)
-    # Combine trails positions and body colors
+    """
+        Trail renderer showing the trajectory of the body with its own color
+    """
+
     scene_data = lift(state.trails, state.bodies) do current_trails, current_bodies
         points = Point3f[]
         colors = RGBAf[]

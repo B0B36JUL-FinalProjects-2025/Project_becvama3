@@ -16,6 +16,8 @@ mutable struct AppState
 
     trajectories::Observable{Vector{Vector{Point3f}}}
 
+    selected_body_index::Observable{Int}
+
     dt::Float32
     frame::UInt64
 
@@ -30,7 +32,9 @@ mutable struct AppState
         _trails       = Observable([Point3f[] for _ in _bodies[]])
         _trajectories = Observable([Point3f[] for _ in _bodies[]])
 
-        new(_playing, _bodies, _trails, _trajectories, dt, 0)
+        _idx = Observable(0)
+
+        new(_playing, _bodies, _trails, _trajectories, _idx, dt, 0)
     end
 
 end
