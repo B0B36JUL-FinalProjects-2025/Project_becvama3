@@ -17,32 +17,26 @@ using StaticArrays
 export main
 
 function main()
+    bodies = [
+        PhysicsBody(@SVector[0f0, 0f0, 0f0], 
+                    @SVector[0f0, 0f0, 0f0], 
+                    1f0)
+    ]
+    state = AppState(init_bodies=bodies, dt=0.016f0)
+
+    run_app(state)
+end
+
+function run_app(state::AppState)
+
+    # preparation of graphical environment
     prepare_glmakie()
+    fig = prepare_renderer(state)
 
-    state = AppState(playing=false, dt=0.016f0)
-    prepare_listeners!(state)
+    # preparation of control listener events
+    control_events(fig, state)
 
-    fig = prepare_render(state)
-
-    recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt)
-    notify(state.trajectories)
-
-    on(events(fig).keyboardbutton) do event
-        if event.action == Keyboard.press || event.action == Keyboard.repeat
-            if event.key == Keyboard.space
-                state.playing[] = !state.playing[]
-                @show state.playing
-            end
-
-            if event.key == Keyboard.delete
-                @show "Reset"
-                reset!(state.bodies[])
-                state.playing[] = false
-                notify(state.bodies)
-            end
-        end
-    end
-
+    # infinite application loop
     while isopen(fig.scene)
         if state.playing[]
             state.frame += 1
@@ -51,6 +45,23 @@ function main()
         end
         
         sleep(state.dt)
+    end
+
+end
+
+function control_events(fig::Figure, state::AppState)
+    on(events(fig).keyboardbutton) do event
+        if event.action == Keyboard.press || event.action == Keyboard.repeat
+            if event.key == Keyboard.space
+                state.playing[] = !state.playing[]
+            end
+
+            if event.key == Keyboard.delete
+                state.playing[] = false
+                reset!(state.bodies[])
+                notify(state.bodies)
+            end
+        end
     end
 end
 
