@@ -261,32 +261,43 @@ function proxyRenderer(ax::LScene, state::AppState)
     """
         Forward preview renderer
     """
-    scene_trajectories = lift(state.trajectories, state.centered_body_index) do trajs, c_idx
+    scene_data = lift(state.trajectories, state.centered_body_index) do trajs, c_idx
         points = Point3f[]
+        colors = RGBAf[]
 
         ref_traj = _get_reference_trail(trajs, c_idx)
 
-        for t in trajs
+        for (i, t) in enumerate(trajs)
+
+            r, g, b = Colors.red(state.bodies[][i].color), Colors.green(state.bodies[][i].color), Colors.blue(state.bodies[][i].color)
+
             for i in eachindex(t)
+                vertex_color = RGBAf(r, g, b, 0.3)
+
                 pt = t[i]
                 if !isnothing(ref_traj)
                     pt -= ref_traj[i]
                 end
                 
                 push!(points, pt)
+                push!(colors, vertex_color)
             end
 
             # Split separate bodies with NaN
             push!(points, Point3f(NaN, NaN, NaN))
+            push!(colors, RGBAf(0,0,0,0)) 
         end
-        return points
+        return (points, colors)
     end
+
+    scene_trajectories = @lift($scene_data[1])
+    colors = @lift($scene_data[2])
 
     lines!(
         ax,
         scene_trajectories;
-        color = (:white, 0.3),
-        linewidth = 1,
+        color = colors,
+        linewidth = 4,
         transparency = true
     )
 end
