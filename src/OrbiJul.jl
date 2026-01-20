@@ -40,7 +40,7 @@ function run_app(state::AppState)
     while isopen(fig.scene)
         if state.playing[]
             state.frame += 1
-            step!(state.bodies[], state.dt, state.trails[], state.frame)
+            step!(state.bodies[], state.dt, state.trails[], state.frame, VelocityVerletSolver())
             notify(state.bodies)
         end
         
