@@ -40,7 +40,7 @@ function run_app(state::AppState)
     while isopen(fig.scene)
         if state.playing[]
             state.frame += 1
-            step!(state.bodies[], state.trails[], state.dt, state.frame)
+            step!(state.bodies[], state.dt, state.trails[], state.frame)
             notify(state.bodies)
         end
         

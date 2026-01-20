@@ -66,7 +66,7 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
         set_close_to!(sl_yvel, b.startVel[2])
         set_close_to!(sl_mass, b.mass)
 
-        toggle_centered.active[] = b.center
+        toggle_centered.active[] = (idx == state.centered_body_index[])
         swatch_color[] = b.color
 
         @show b
@@ -76,18 +76,10 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
         idx = state.selected_body_index[]
         !checkbounds(Bool, state.bodies[], idx) && return nothing
 
-        @show centered
         if centered # if switched ON
-            # reset all bodies (de-centering some previously centered body)
-            for b in eachindex(state.bodies[])
-                state.bodies[][b].center = false
-            end
-
-            # center selcted one
-            state.bodies[][idx].center = true
+            # center selected one
             state.centered_body_index[] = idx
-        elseif state.bodies[][idx].center # if switched OFF
-            state.bodies[][idx].center = false
+        elseif idx == state.centered_body_index[] # if switched OFF
             state.centered_body_index[] = 0
         end
 
@@ -321,16 +313,16 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
 
     z = lift(state.bodies, grid_geom, wireframe_enabled) do bodies, (x,y,zbuf), enabled
         fill!(zbuf, -1f0)
-        if !enabled
-            return zbuf
-        end
+        !enabled && return zbuf
 
         center_pos = _get_center_pos(bodies, state.centered_body_index[])
 
         for b in bodies
+            rel_pos = b.pos - center_pos
+
             for j in eachindex(y), i in eachindex(x)
-                dx = x[i] - (b.pos[1] - center_pos[1])
-                dy = y[j] - (b.pos[2] - center_pos[2])
+                dx = x[i] - rel_pos[1]
+                dy = y[j] - rel_pos[2]
                 dist2 = max(dx*dx + dy*dy, 1e-4)
 
                 # Grav potential
@@ -338,9 +330,10 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
             end
         end
         
-        zbuf *= 1 # This needs to be here for some reason
-        zbuf .= clamp.(zbuf, -20f0, -1f0)
-        return zbuf
+        # zbuf *= 1 # This needs to be here for some reason
+        # zbuf .= clamp.(zbuf, -20f0, -1f0)
+        clamp!(zbuf, -20f0, -1f0)
+        return copy(zbuf)
     end
 
     wireframe!(ax, x_obs, y_obs, z, visible=wireframe_enabled, linestyle=(:dot, :loose))
@@ -388,7 +381,7 @@ function trailRenderer(ax::LScene, state::AppState)
     C = @lift($scene_data[2])
 
     # Draw the tails
-    lines!(ax, P; color = C, linewidth = 2.5, transparency = false)
+    lines!(ax, P; color = C, linewidth = 2.5, transparency = true)
 end
 
 end
