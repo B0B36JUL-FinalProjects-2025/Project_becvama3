@@ -1,12 +1,13 @@
 module OrbiJul
 
-using StaticArrays: _transpose
-
 include("simulator.jl")
 using .Simulator
 
 include("state_machine.jl")
 using .StateMachine
+
+include("serializer.jl")
+using .Serializer
 
 include("renderer.jl")
 using .Renderer

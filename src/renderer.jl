@@ -6,6 +6,7 @@ using StaticArrays
 
 using ..Simulator: PhysicsBody, reset!, EulerSolver, VelocityVerletSolver
 using ..StateMachine: AppState
+using ..Serializer: save_scenario, load_scenario_dialog
 
 export prepare_glmakie, prepare_renderer
 
@@ -20,9 +21,9 @@ function prepare_glmakie()
 end
 
 function prepare_renderer(state::AppState)
-    fig = Figure(backgroundcolor = :gray20)
-    ax = LScene(fig[1, 1], show_axis=false, scenekw = (backgroundcolor = :gray20, clear=true))
-    grid = GridLayout(fig[2,1]; tellwidth=false) 
+    fig = Figure(backgroundcolor=:gray20)
+    ax = LScene(fig[1, 1], show_axis=false, scenekw=(backgroundcolor=:gray20, clear=true))
+    grid = GridLayout(fig[2, 1]; tellwidth=false)
 
     uielements = uiRenderer(grid, state)
     bodyRenderer(ax, state)
@@ -42,22 +43,22 @@ function _panel_body_inspector(inspector_grid::GridLayout, state::AppState, swat
     inspector_grid.halign = :left
 
     Label(inspector_grid[1, 1], "Pos (X/Y):", color=:white)
-    sl_xpos = Slider(inspector_grid[1, 2], range=-100f0:0.1f0:100f0, width=250)
-    sl_ypos = Slider(inspector_grid[1, 3], range=-100f0:0.1f0:100f0, width=250)
+    sl_xpos = Slider(inspector_grid[1, 2], range=-100.0f0:0.1f0:100.0f0, width=250)
+    sl_ypos = Slider(inspector_grid[1, 3], range=-100.0f0:0.1f0:100.0f0, width=250)
 
     Label(inspector_grid[2, 1], "Vel (X/Y):", color=:white)
-    sl_xvel = Slider(inspector_grid[2, 2], range=-50f0:0.1f0:50f0, width=250)
-    sl_yvel = Slider(inspector_grid[2, 3], range=-50f0:0.1f0:50f0, width=250)
+    sl_xvel = Slider(inspector_grid[2, 2], range=-50.0f0:0.1f0:50.0f0, width=250)
+    sl_yvel = Slider(inspector_grid[2, 3], range=-50.0f0:0.1f0:50.0f0, width=250)
 
     Label(inspector_grid[3, 1], "Mass", color=:white)
-    sl_mass = Slider(inspector_grid[3, 2], range=0.1f0:0.1f0:1000f0, width=250, tellwidth=false)
+    sl_mass = Slider(inspector_grid[3, 2], range=0.1f0:0.1f0:1000.0f0, width=250, tellwidth=false)
 
     Label(inspector_grid[4, 1], "Centered", color=:white)
-    toggle_centered = Toggle(inspector_grid[4,2], active=false, halign=:right, tellwidth=false)
+    toggle_centered = Toggle(inspector_grid[4, 2], active=false, halign=:left, tellwidth=false)
 
     on(state.selected_body_index) do idx
         if !checkbounds(Bool, state.bodies[], idx)
-            swatch_color[] = RGBAf(0,0,0,0)
+            swatch_color[] = RGBAf(0, 0, 0, 0)
             return nothing
         end
 
@@ -71,11 +72,9 @@ function _panel_body_inspector(inspector_grid::GridLayout, state::AppState, swat
 
         toggle_centered.active[] = (idx == state.centered_body_index[])
         swatch_color[] = b.color
-
-        @show b
     end
 
-    on(toggle_centered.active) do centered 
+    on(toggle_centered.active) do centered
         idx = state.selected_body_index[]
         !checkbounds(Bool, state.bodies[], idx) && return nothing
 
@@ -95,16 +94,26 @@ function _panel_body_inspector(inspector_grid::GridLayout, state::AppState, swat
 
         state.playing[] = false
 
-        f(state.bodies[][idx]) 
-        reset!(state.bodies[]) 
-        notify(state.bodies)   
+        f(state.bodies[][idx])
+        reset!(state.bodies[])
+        notify(state.bodies)
     end
 
-    on(sl_xpos.value) do p; update_body_param(b -> b.startPos = @SVector[p, b.startPos[2], b.startPos[3]]) end
-    on(sl_ypos.value) do p; update_body_param(b -> b.startPos = @SVector[b.startPos[1], p, b.startPos[3]]) end
-    on(sl_xvel.value) do v; update_body_param(b -> b.startVel = @SVector[v, b.startVel[2], b.startVel[3]]) end
-    on(sl_yvel.value) do v; update_body_param(b -> b.startVel = @SVector[b.startVel[1], v, b.startVel[3]]) end
-    on(sl_mass.value) do m; update_body_param(b -> b.mass = m) end
+    on(sl_xpos.value) do p
+        update_body_param(b -> b.startPos = @SVector[p, b.startPos[2], b.startPos[3]])
+    end
+    on(sl_ypos.value) do p
+        update_body_param(b -> b.startPos = @SVector[b.startPos[1], p, b.startPos[3]])
+    end
+    on(sl_xvel.value) do v
+        update_body_param(b -> b.startVel = @SVector[v, b.startVel[2], b.startVel[3]])
+    end
+    on(sl_yvel.value) do v
+        update_body_param(b -> b.startVel = @SVector[b.startVel[1], v, b.startVel[3]])
+    end
+    on(sl_mass.value) do m
+        update_body_param(b -> b.mass = m)
+    end
 end
 
 function _panel_body_selection(select_grid::GridLayout, state::AppState)
@@ -120,9 +129,9 @@ function _panel_body_selection(select_grid::GridLayout, state::AppState)
 
     bodyOptions = @lift([string(i) for i in 1:$body_count])
 
-    Label(select_grid[1,1], "Body Selection:", fontsize=16, color=:white)
-    swatch_color = Observable{RGBAf}(RGBAf(0,0,0,0))
-    Box(select_grid[1,2], color=swatch_color, width=32, cornerradius=100)
+    Label(select_grid[1, 1], "Body Selection:", fontsize=16, color=:white)
+    swatch_color = Observable{RGBAf}(RGBAf(0, 0, 0, 0))
+    Box(select_grid[1, 2], color=swatch_color, width=32, cornerradius=100)
     menu = Menu(select_grid[1, 3], options=bodyOptions, default=nothing, width=150)
 
     btn_grid = GridLayout(tellwidth=false, halign=:left)
@@ -130,10 +139,9 @@ function _panel_body_selection(select_grid::GridLayout, state::AppState)
 
     # When menu changes, update our index
     on(menu.selection) do selection
-        @show selection
-        if isnothing(selection) 
+        if isnothing(selection)
             state.selected_body_index[] = 0
-            return 
+            return
         end
 
         state.playing[] = false
@@ -142,22 +150,22 @@ function _panel_body_selection(select_grid::GridLayout, state::AppState)
         state.selected_body_index[] = idx
     end
 
-    bAdd    = Button(btn_grid[1, 1], label = "+", width=30, labelcolor=:white, font=:bold, buttoncolor = RGBAf(0,1,0, 0.5))
-    bRemove = Button(btn_grid[1, 2], label = "-", width=30, labelcolor=:white, font=:bold, buttoncolor = RGBAf(1,0,0, 0.8))
+    bAdd = Button(btn_grid[1, 1], label="+", width=30, labelcolor=:white, font=:bold, buttoncolor=RGBAf(0, 1, 0, 0.5))
+    bRemove = Button(btn_grid[1, 2], label="-", width=30, labelcolor=:white, font=:bold, buttoncolor=RGBAf(1, 0, 0, 0.8))
 
-    on(bAdd.clicks) do click 
+    on(bAdd.clicks) do click
         state.playing[] = false
 
-        push!(state.bodies[], 
-              PhysicsBody(@SVector[0f0, 0f0, 0f0], 
-                          @SVector[0f0, 0f0, 0f0], 
-                          1f0)
-             )
+        push!(state.bodies[],
+            PhysicsBody(@SVector[0.0f0, 0.0f0, 0.0f0],
+                @SVector[0.0f0, 0.0f0, 0.0f0],
+                500.0f0)
+        )
 
         reset!(state.bodies[])
         notify(state.bodies)
     end
-    on(bRemove.clicks) do click 
+    on(bRemove.clicks) do click
         isempty(state.bodies[]) && return nothing
 
         idx = state.selected_body_index[]
@@ -181,10 +189,44 @@ function _panel_sim_inspector(sim_grid::GridLayout, state::AppState)
     """
     solver_opts = ["Euler Method", "Velocity Verlet"]
 
-    Label(sim_grid[1,1], "Solver Selection", color=:white)
-    solver_menu = Menu(sim_grid[1,2], options=solver_opts, default="Velocity Verlet", width=200)
+    Label(sim_grid[1, 1], "Scenarios", color=:white)
+    btn_grid = GridLayout(tellwidth=false, halign=:center)
+    sim_grid[1, 2] = btn_grid
+    bSave = Button(btn_grid[1, 1], label="Save")
+    bLoad = Button(btn_grid[1, 2], label="Load")
 
-    on(solver_menu.selection) do selection 
+    on(bSave.clicks) do _
+        state.playing[] = false
+        reset!(state.bodies[])
+        notify(state.bodies)
+
+        save_scenario(state.bodies[])
+    end
+
+    on(bLoad.clicks) do _
+        # Open dialog and parse JSON
+        new_bodies = load_scenario_dialog()
+
+        # If user picked a valid file (didn't cancel):
+        if !isnothing(new_bodies)
+            state.playing[] = false
+
+            # Update State
+            state.bodies[] = new_bodies
+            state.selected_body_index[] = 1
+            state.centered_body_index[] = 0
+
+            # Force Refresh
+            reset!(state.bodies[])
+            notify(state.bodies)
+        end
+    end
+
+
+    Label(sim_grid[2, 1], "Solver Selection", color=:white)
+    solver_menu = Menu(sim_grid[2, 2], options=solver_opts, default="Velocity Verlet", width=200)
+
+    on(solver_menu.selection) do selection
         if selection == "Euler Method"
             state.solver[] = EulerSolver()
         elseif selection == "Velocity Verlet"
@@ -192,11 +234,11 @@ function _panel_sim_inspector(sim_grid::GridLayout, state::AppState)
         end
     end
 
-    Label(sim_grid[2,1], "Show Gravitational Potential", color=:white)
-    toggle_wireframe = Toggle(sim_grid[2,2], active=true)
+    Label(sim_grid[3, 1], "Show Gravitational Potential", color=:white)
+    toggle_wireframe = Toggle(sim_grid[3, 2], active=true)
 
-    Label(sim_grid[3,1], "Wireframe scale", color=:white)
-    sl_wireframe = Slider(sim_grid[3,2], range=1f0:0.1:10f0, startvalue=5, snap=true, width=100)
+    Label(sim_grid[4, 1], "Wireframe scale", color=:white)
+    sl_wireframe = Slider(sim_grid[4, 2], range=1.0f0:0.1:10.0f0, startvalue=5, snap=true, width=100)
 
     return UIElements(toggle_wireframe, sl_wireframe)
 end
@@ -215,11 +257,11 @@ function uiRenderer(grid::GridLayout, state::AppState)
     swatch_color = _panel_body_selection(select_grid, state)
 
     # --- Body Attributes ---
-    attribute_grid = create_panel(2,1)
+    attribute_grid = create_panel(2, 1)
     _panel_body_inspector(attribute_grid, state, swatch_color)
 
     # --- Sim Attributes ---
-    sim_grid = create_panel(3,1)
+    sim_grid = create_panel(3, 1)
     ui_elements::UIElements = _panel_sim_inspector(sim_grid, state)
 
     return ui_elements
@@ -253,42 +295,42 @@ function _get_reference_trail(trails::Vector{Vector{Point3f}}, c_idx::Int)
 end
 
 function bodyRenderer(ax::LScene, state::AppState)
-    pos = lift(state.bodies) do bodies 
+    pos = lift(state.bodies) do bodies
         center_pos = _get_center_pos(bodies, state.centered_body_index[])
-        
+
         return [Point3f(body.pos) - center_pos for body in bodies]
     end
 
     # pos = @lift([Point3f(body.pos) for body in $(state.bodies)]) 
 
     # based on solid planet scale ratios
-    power::Float32 = 1/3
+    power::Float32 = 1 / 3
     sizes = @lift([body.mass^power for body in $(state.bodies)])
 
     body_colors = @lift([body.color for body in $(state.bodies)])
 
-    sphere = Sphere(Point3f(0), 1f0)
-    
+    sphere = Sphere(Point3f(0), 1.0f0)
+
     meshscatter!(
         ax,
         pos;
-        marker = sphere,
-        markersize = sizes,
-        color = body_colors,
-        shading = true
+        marker=sphere,
+        markersize=sizes,
+        color=body_colors,
+        shading=true
     )
 
     # highlight the selected body
     selection_geometry = lift(state.playing, state.bodies, state.selected_body_index) do playing, bodies, idx
         if playing || !checkbounds(Bool, bodies, idx)
-            return Sphere(Point3f(0), 0f0)
+            return Sphere(Point3f(0), 0.0f0)
         end
         center_pos = _get_center_pos(bodies, state.centered_body_index[])
 
         b = bodies[idx]
-        
+
         pos = Point3f(b.pos) - center_pos
-        size = b.mass^power * 1.1f0 
+        size = b.mass^power * 1.1f0
 
         return Sphere(pos, size)
     end
@@ -317,14 +359,14 @@ function proxyRenderer(ax::LScene, state::AppState)
                 if !isnothing(ref_traj)
                     pt -= ref_traj[i]
                 end
-                
+
                 push!(points, pt)
                 push!(colors, vertex_color)
             end
 
             # Split separate bodies with NaN
             push!(points, Point3f(NaN, NaN, NaN))
-            push!(colors, RGBAf(0,0,0,0)) 
+            push!(colors, RGBAf(0, 0, 0, 0))
         end
         return (points, colors)
     end
@@ -335,9 +377,9 @@ function proxyRenderer(ax::LScene, state::AppState)
     lines!(
         ax,
         scene_trajectories;
-        color = colors,
-        linewidth = 4,
-        transparency = true
+        color=colors,
+        linewidth=4,
+        transparency=true
     )
 end
 
@@ -347,7 +389,7 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
         x = collect(-100:step:100)
         y = collect(-100:step:100)
         z = zeros(Float32, length(x), length(y))
-        return x,y,z
+        return x, y, z
     end
 
     wireframe_enabled = uielements.cb_wireframe.active
@@ -355,14 +397,14 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
 
     grid_geom = lift(slider) do step
         x, y, z = create_grid(step)
-        return (x,y,z)
+        return (x, y, z)
     end
 
     x_obs = @lift($grid_geom[1])
     y_obs = @lift($grid_geom[2])
 
-    z = lift(state.bodies, grid_geom, wireframe_enabled) do bodies, (x,y,zbuf), enabled
-        fill!(zbuf, -1f0)
+    z = lift(state.bodies, grid_geom, wireframe_enabled) do bodies, (x, y, zbuf), enabled
+        fill!(zbuf, -1.0f0)
         # !enabled && return zbuf
 
         center_pos = _get_center_pos(bodies, state.centered_body_index[])
@@ -373,16 +415,16 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
             for j in eachindex(y), i in eachindex(x)
                 dx = x[i] - rel_pos[1]
                 dy = y[j] - rel_pos[2]
-                dist2 = max(dx*dx + dy*dy, 1e-4)
+                dist2 = max(dx * dx + dy * dy, 1e-4)
 
                 # Grav potential
                 zbuf[i, j] -= b.mass / sqrt(dist2)
             end
         end
-        
+
         # zbuf *= 1 # This needs to be here for some reason
         # zbuf .= clamp.(zbuf, -20f0, -1f0)
-        clamp!(zbuf, -50f0, -1f0)
+        clamp!(zbuf, -50.0f0, -1.0f0)
         return copy(zbuf)
     end
 
@@ -402,7 +444,9 @@ function trailRenderer(ax::LScene, state::AppState)
 
         for (i, t) in enumerate(trails)
             n_points = length(t)
-            if n_points == 0; continue; end
+            if n_points == 0
+                continue
+            end
 
             r, g, b = Colors.red(bodies[i].color), Colors.green(bodies[i].color), Colors.blue(bodies[i].color)
 
@@ -422,7 +466,7 @@ function trailRenderer(ax::LScene, state::AppState)
 
             # NaN break to separate different bodies lines 
             push!(points, Point3f(NaN))
-            push!(colors, RGBAf(0,0,0,0)) 
+            push!(colors, RGBAf(0, 0, 0, 0))
         end
         return (points, colors)
     end
@@ -431,7 +475,7 @@ function trailRenderer(ax::LScene, state::AppState)
     C = @lift($scene_data[2])
 
     # Draw the tails
-    lines!(ax, P; color = C, linewidth = 2.5, transparency = true)
+    lines!(ax, P; color=C, linewidth=2.5, transparency=true)
 end
 
 end
