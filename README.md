@@ -8,6 +8,13 @@ Contains prepared examples.
 
 ![hero](./pics/OrbiJul.png)
 
+## Running the Project
+
+Clone the project folder from Github. Navigate to the folder and run:
+```bash
+julia --project -e "using OrbiJul; main()"
+```
+
 ## Application Controls
 
 | Input | Action |
