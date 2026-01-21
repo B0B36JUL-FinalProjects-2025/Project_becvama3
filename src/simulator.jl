@@ -10,6 +10,7 @@ export EulerSolver, VelocityVerletSolver
 abstract type  AbstractSolver end
 struct EulerSolver <: AbstractSolver end
 struct VelocityVerletSolver <: AbstractSolver end
+struct RK4Solver <: AbstractSolver end
 
 const G = 10
 
@@ -55,32 +56,33 @@ function step!(bodies::Vector{PhysicsBody}, dt::Float32, trails::Vector{Vector{P
     end
 end
 
-function calculate_accelerations(bodies::Vector{PhysicsBody})
-accels = zeros(SVector{3, Float32}, length(bodies))
+function get_accel(positions, masses)
+    n = length(positions)
+    accels = zeros(SVector{3, Float32}, n)
 
-    for i in eachindex(bodies)
-        bi = bodies[i]
-        f_acc = SVector{3, Float32}(0,0,0)
-
-        for j in eachindex(bodies) 
+    for i in 1:n
+        pos_i = positions[i]
+        a = SVector{3, Float32}(0,0,0)
+        
+        for j in 1:n
             i == j && continue
-
-            bj = bodies[j]
-
-            r = bi.pos - bj.pos
+            
+            r = pos_i - positions[j]
             dist2 = max(sum(abs2, r), 1f-4)
-
-            # F = G * m1 * m2 / r^2
-            # a = F / m1
-            f_acc -= G * bj.mass * r / sqrt(dist2^3)
+            a -= G * masses[j] * r / sqrt(dist2^3)
         end
-        accels[i] = f_acc
+        accels[i] = a
     end
-
     return accels
 end
 
-function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, solver::EulerSolver)
+function calculate_accelerations(bodies::Vector{PhysicsBody})
+    pos = [b.pos for b in bodies]
+    masses = [b.mass for b in bodies]
+    return get_accel(pos, masses)
+end
+
+function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, ::EulerSolver)
     """
         Euler method physics step
     """
@@ -98,7 +100,7 @@ function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, solver::EulerSo
     end
 end
 
-function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, solver::VelocityVerletSolver)
+function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, ::VelocityVerletSolver)
     """
         Implementation of the velocity verlet step based on:
         https://en.wikipedia.org/wiki/Verlet_integration#Velocity_Verlet
@@ -130,8 +132,47 @@ function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, solver::Velocit
 
 end
 
-function record_trails!(bodies::Vector{PhysicsBody}, trails::Vector{Vector{Point3f}}, frame::UInt64)
+# Runge-Kutta 4 (RK4)
+function physics_step!(bodies::Vector{PhysicsBody}, dt::Float32, ::RK4Solver)
+    # Extract arrays for vectorized math
+    x = [b.pos for b in bodies]
+    v = [b.vel for b in bodies]
+    m = [b.mass for b in bodies]
+    
+    # k1: Slope at start
+    a1 = get_accel(x, m)
+    v1 = v
+    
+    # k2: Slope at midpoint using k1
+    x2 = x .+ v1 .* (0.5f0 * dt)
+    # We approximate velocity at midpoint as v + a1 * 0.5dt
+    v_mid1 = v .+ a1 .* (0.5f0 * dt) 
+    a2 = get_accel(x2, m)
+    v2 = v_mid1
+    
+    # k3: Slope at midpoint using k2
+    x3 = x .+ v2 .* (0.5f0 * dt)
+    v_mid2 = v .+ a2 .* (0.5f0 * dt)
+    a3 = get_accel(x3, m)
+    v3 = v_mid2
+    
+    # k4: Slope at end using k3
+    x4 = x .+ v3 .* dt
+    v_end = v .+ a3 .* dt
+    a4 = get_accel(x4, m)
+    v4 = v_end
+    
+    # Combine (Simpson's Rule)
+    for i in eachindex(bodies)
+        dx = (v1[i] + 2*v2[i] + 2*v3[i] + v4[i]) * (dt / 6.0f0)
+        dv = (a1[i] + 2*a2[i] + 2*a3[i] + a4[i]) * (dt / 6.0f0)
+        
+        bodies[i].pos += dx
+        bodies[i].vel += dv
+    end
+end
 
+function record_trails!(bodies::Vector{PhysicsBody}, trails::Vector{Vector{Point3f}}, frame::UInt64)
     # Trail only on limited number of steps
     frame % 3 != 0 && return 
 
@@ -144,14 +185,14 @@ function record_trails!(bodies::Vector{PhysicsBody}, trails::Vector{Vector{Point
     end
 end
 
-function recompute_trajectories!(bodies::Vector{PhysicsBody}, trajectories::Vector{Vector{Point3f}}; dt::Float32, steps::UInt64=UInt64(5000), solver::AbstractSolver=EulerSolver())
+function recompute_trajectories!(bodies::Vector{PhysicsBody}, trajectories::Vector{Vector{Point3f}}; dt::Float32, steps::UInt64=UInt64(20000), solver::AbstractSolver)
     test_bodies = deepcopy(bodies)
 
     # clean trajectories
     for traj in trajectories
         empty!(traj)
     end
-
+    
     for _ in 1:steps
         physics_step!(test_bodies, dt, solver)
 

@@ -23,7 +23,8 @@ function main()
                     @SVector[0f0, 0f0, 0f0], 
                     500f0)
     ]
-    state = AppState(init_bodies=bodies, dt=0.016f0)
+    # state = AppState(init_bodies=bodies, dt=0.016f0)
+    state = AppState(init_bodies=bodies, dt=Float32(1/30))
 
     run_app(state)
 end

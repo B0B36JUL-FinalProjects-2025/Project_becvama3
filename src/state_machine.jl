@@ -1,6 +1,6 @@
 module StateMachine
     
-using ..Simulator: PhysicsBody, AbstractSolver, recompute_trajectories!, EulerSolver, VelocityVerletSolver, reset!
+using ..Simulator: PhysicsBody, AbstractSolver, recompute_trajectories!, EulerSolver, VelocityVerletSolver, RK4Solver, reset!
 
 using StaticArrays
 
@@ -72,6 +72,7 @@ function prepare_listeners!(state::AppState)
     end
 
     on(state.solver) do solver
+        @show solver
         state.playing[] = false
         reset!(state.bodies[])
         notify(state.bodies)
