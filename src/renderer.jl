@@ -34,22 +34,25 @@ function prepare_renderer(state::AppState)
     return fig
 end
 
-function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, swatch_color::Observable)
+function _panel_body_inspector(inspector_grid::GridLayout, state::AppState, swatch_color::Observable)
+    """
+    Panel creating helper
+    """
 
     inspector_grid.halign = :left
 
-    Label(inspector_grid[1, 1], "Pos (X/Y):")
+    Label(inspector_grid[1, 1], "Pos (X/Y):", color=:white)
     sl_xpos = Slider(inspector_grid[1, 2], range=-100f0:0.1f0:100f0, width=250)
     sl_ypos = Slider(inspector_grid[1, 3], range=-100f0:0.1f0:100f0, width=250)
 
-    Label(inspector_grid[2, 1], "Vel (X/Y):")
-    sl_xvel = Slider(inspector_grid[2, 2], range=-10f0:0.1f0:10f0, width=250)
-    sl_yvel = Slider(inspector_grid[2, 3], range=-10f0:0.1f0:10f0, width=250)
+    Label(inspector_grid[2, 1], "Vel (X/Y):", color=:white)
+    sl_xvel = Slider(inspector_grid[2, 2], range=-50f0:0.1f0:50f0, width=250)
+    sl_yvel = Slider(inspector_grid[2, 3], range=-50f0:0.1f0:50f0, width=250)
 
-    Label(inspector_grid[3, 1], "Mass")
-    sl_mass = Slider(inspector_grid[3, 2], range=1f0:1f0:100f0, width=250, tellwidth=false)
+    Label(inspector_grid[3, 1], "Mass", color=:white)
+    sl_mass = Slider(inspector_grid[3, 2], range=0.1f0:0.1f0:1000f0, width=250, tellwidth=false)
 
-    Label(inspector_grid[4, 1], "Centered")
+    Label(inspector_grid[4, 1], "Centered", color=:white)
     toggle_centered = Toggle(inspector_grid[4,2], active=false, halign=:right, tellwidth=false)
 
     on(state.selected_body_index) do idx
@@ -104,7 +107,10 @@ function bodyInspector(menu::Menu, inspector_grid::GridLayout, state::AppState, 
     on(sl_mass.value) do m; update_body_param(b -> b.mass = m) end
 end
 
-function uiRenderer(grid::GridLayout, state::AppState)
+function _panel_body_selection(select_grid::GridLayout, state::AppState)
+    """
+    Panel creating helper
+    """
     body_count = Observable(length(state.bodies[]))
     on(state.bodies) do bodies
         if body_count[] != length(bodies)
@@ -114,15 +120,13 @@ function uiRenderer(grid::GridLayout, state::AppState)
 
     bodyOptions = @lift([string(i) for i in 1:$body_count])
 
-    menu_row = GridLayout(tellwidth=false, halign=:left)
-    grid[1,1] = menu_row
-
+    Label(select_grid[1,1], "Body Selection:", fontsize=16, color=:white)
     swatch_color = Observable{RGBAf}(RGBAf(0,0,0,0))
-    Box(menu_row[1,1], color=swatch_color, width=32, cornerradius=100)
-    menu = Menu(menu_row[1, 2], options=bodyOptions, default=nothing)
+    Box(select_grid[1,2], color=swatch_color, width=32, cornerradius=100)
+    menu = Menu(select_grid[1, 3], options=bodyOptions, default=nothing, width=150)
 
     btn_grid = GridLayout(tellwidth=false, halign=:left)
-    menu_row[1, 3] = btn_grid
+    select_grid[1, 4] = btn_grid
 
     # When menu changes, update our index
     on(menu.selection) do selection
@@ -138,8 +142,8 @@ function uiRenderer(grid::GridLayout, state::AppState)
         state.selected_body_index[] = idx
     end
 
-    bAdd    = Button(btn_grid[1, 1], label = "+", labelcolor=:white, font=:bold, buttoncolor = RGBAf(0,1,0, 0.5))
-    bRemove = Button(btn_grid[1, 2], label = "-", labelcolor=:white, font=:bold, buttoncolor = RGBAf(1,0,0, 0.8))
+    bAdd    = Button(btn_grid[1, 1], label = "+", width=30, labelcolor=:white, font=:bold, buttoncolor = RGBAf(0,1,0, 0.5))
+    bRemove = Button(btn_grid[1, 2], label = "-", width=30, labelcolor=:white, font=:bold, buttoncolor = RGBAf(1,0,0, 0.8))
 
     on(bAdd.clicks) do click 
         state.playing[] = false
@@ -168,15 +172,17 @@ function uiRenderer(grid::GridLayout, state::AppState)
         notify(state.bodies)
     end
 
-    Box(grid[2, 1:2], color = :gray) 
-    inspector_grid = GridLayout(grid[2, 1:2], tellwidth=false)
+    return swatch_color
+end
 
-    bodyInspector(menu, inspector_grid, state, swatch_color)
-
+function _panel_sim_inspector(sim_grid::GridLayout, state::AppState)
+    """
+    Panel creating helper
+    """
     solver_opts = ["Euler Method", "Velocity Verlet"]
 
-    Label(grid[3,1], "Solver Selection", halign=:right, tellwidth=false)
-    solver_menu = Menu(grid[3,2], options=solver_opts, default="Velocity Verlet")
+    Label(sim_grid[1,1], "Solver Selection", color=:white)
+    solver_menu = Menu(sim_grid[1,2], options=solver_opts, default="Velocity Verlet", width=200)
 
     on(solver_menu.selection) do selection 
         if selection == "Euler Method"
@@ -186,13 +192,37 @@ function uiRenderer(grid::GridLayout, state::AppState)
         end
     end
 
-    Label(grid[4,1], "Show Gravitational Potential", halign=:right, tellwidth=false)
-    toggle_wireframe = Toggle(grid[4,2], active=true, halign=:left, tellwidth=false)
+    Label(sim_grid[2,1], "Show Gravitational Potential", color=:white)
+    toggle_wireframe = Toggle(sim_grid[2,2], active=true)
 
-    Label(grid[5,1], "Wireframe scale", halign=:right, tellwidth=false)
-    sl_wireframe = Slider(grid[5,2], range=0.1f0:0.1:2.5f0, startvalue=1, snap=true, width=100, halign=:left, tellwidth=false)
+    Label(sim_grid[3,1], "Wireframe scale", color=:white)
+    sl_wireframe = Slider(sim_grid[3,2], range=1f0:0.1:10f0, startvalue=5, snap=true, width=100)
 
     return UIElements(toggle_wireframe, sl_wireframe)
+end
+
+
+function uiRenderer(grid::GridLayout, state::AppState)
+    function create_panel(row, col)
+        Box(grid[row, col], color=:gray25, cornerradius=8)
+        container = GridLayout(grid[row, col], alignmode=Outside(10))
+
+        return GridLayout(container[1, 1], tellwidth=false, halign=:left)
+    end
+
+    # --- Body selection ---
+    select_grid = create_panel(1, 1)
+    swatch_color = _panel_body_selection(select_grid, state)
+
+    # --- Body Attributes ---
+    attribute_grid = create_panel(2,1)
+    _panel_body_inspector(attribute_grid, state, swatch_color)
+
+    # --- Sim Attributes ---
+    sim_grid = create_panel(3,1)
+    ui_elements::UIElements = _panel_sim_inspector(sim_grid, state)
+
+    return ui_elements
 end
 
 
@@ -231,6 +261,7 @@ function bodyRenderer(ax::LScene, state::AppState)
 
     # pos = @lift([Point3f(body.pos) for body in $(state.bodies)]) 
 
+    # based on solid planet scale ratios
     power::Float32 = 1/3
     sizes = @lift([body.mass^power for body in $(state.bodies)])
 
@@ -257,12 +288,12 @@ function bodyRenderer(ax::LScene, state::AppState)
         b = bodies[idx]
         
         pos = Point3f(b.pos) - center_pos
-        size = b.mass^power * 1.05f0 
+        size = b.mass^power * 1.1f0 
 
         return Sphere(pos, size)
     end
 
-    wireframe!(ax, selection_geometry; color=:red, linewidth=1, alpha=0.2)
+    wireframe!(ax, selection_geometry; color=:red, linewidth=2, alpha=0.5)
 end
 
 function proxyRenderer(ax::LScene, state::AppState)
@@ -313,8 +344,8 @@ end
 
 function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
     function create_grid(step::Float64)
-        x = collect(-25:step:25)
-        y = collect(-25:step:25)
+        x = collect(-100:step:100)
+        y = collect(-100:step:100)
         z = zeros(Float32, length(x), length(y))
         return x,y,z
     end
@@ -332,7 +363,7 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
 
     z = lift(state.bodies, grid_geom, wireframe_enabled) do bodies, (x,y,zbuf), enabled
         fill!(zbuf, -1f0)
-        !enabled && return zbuf
+        # !enabled && return zbuf
 
         center_pos = _get_center_pos(bodies, state.centered_body_index[])
 
@@ -351,7 +382,7 @@ function wireframeRenderer(ax::LScene, state::AppState, uielements::UIElements)
         
         # zbuf *= 1 # This needs to be here for some reason
         # zbuf .= clamp.(zbuf, -20f0, -1f0)
-        clamp!(zbuf, -20f0, -1f0)
+        clamp!(zbuf, -50f0, -1f0)
         return copy(zbuf)
     end
 

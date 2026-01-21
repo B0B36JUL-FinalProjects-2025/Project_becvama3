@@ -20,7 +20,7 @@ function main()
     bodies = [
         PhysicsBody(@SVector[0f0, 0f0, 0f0], 
                     @SVector[0f0, 0f0, 0f0], 
-                    1f0)
+                    500f0)
     ]
     state = AppState(init_bodies=bodies, dt=0.016f0)
 
