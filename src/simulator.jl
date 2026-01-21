@@ -5,7 +5,7 @@ using GLMakie
 using Colors
 
 export PhysicsBody, step!, reset!, recompute_trajectories!
-export EulerSolver, VelocityVerletSolver
+export EulerSolver, VelocityVerletSolver, RK4Solver
 
 abstract type  AbstractSolver end
 struct EulerSolver <: AbstractSolver end
@@ -48,7 +48,7 @@ function reset!(bodies::Vector{PhysicsBody})
     end
 end
 
-function step!(bodies::Vector{PhysicsBody}, dt::Float32, trails::Vector{Vector{Point3f}}, frame::UInt64, solver::AbstractSolver=EulerSolver())
+function step!(bodies::Vector{PhysicsBody}, dt::Float32, trails::Union{Vector{Vector{Point3f}}, Nothing}, frame::UInt64, solver::AbstractSolver=EulerSolver())
     physics_step!(bodies, dt, solver)
 
     if !isnothing(trails)

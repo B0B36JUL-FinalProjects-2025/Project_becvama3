@@ -6,7 +6,7 @@ using StaticArrays
 using Colors
 using ..Simulator: PhysicsBody
 
-export save_scenario, load_scenario_dialog
+export save_scenario, load_scenario_dialog, dict_to_body, body_to_dict
 
 function body_to_dict(b::PhysicsBody)
     return Dict(
