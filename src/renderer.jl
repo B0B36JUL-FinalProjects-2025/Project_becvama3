@@ -4,7 +4,7 @@ using GLMakie
 using Colors
 using StaticArrays
 
-using ..Simulator: PhysicsBody, reset!
+using ..Simulator: PhysicsBody, reset!, EulerSolver, VelocityVerletSolver
 using ..StateMachine: AppState
 
 export prepare_glmakie, prepare_renderer
@@ -166,11 +166,6 @@ function uiRenderer(grid::GridLayout, state::AppState)
         menu.selection[] = nothing
 
         notify(state.bodies)
-
-        # RESELECT on remove is kinda iffy - choosing to discard selecion on remove
-        # if !isempty(state.bodies[]) 
-        #     menu.selection[] = "1"
-        # end
     end
 
     Box(grid[2, 1:2], color = :gray) 
@@ -178,11 +173,24 @@ function uiRenderer(grid::GridLayout, state::AppState)
 
     bodyInspector(menu, inspector_grid, state, swatch_color)
 
-    toggle_wireframe = Toggle(grid[3,1], active=true, halign=:right, tellwidth=false)
-    Label(grid[3,2], "Show Gravitational Potential", halign=:left, tellwidth=false)
+    solver_opts = ["Euler Method", "Velocity Verlet"]
 
-    sl_wireframe = Slider(grid[4,1], range=0.1f0:0.1:2.5f0, startvalue=1, snap=true, width=100, halign=:right, tellwidth=false)
-    Label(grid[4,2], "Wireframe scale", halign=:left, tellwidth=false)
+    Label(grid[3,1], "Solver Selection", halign=:right, tellwidth=false)
+    solver_menu = Menu(grid[3,2], options=solver_opts, default="Velocity Verlet")
+
+    on(solver_menu.selection) do selection 
+        if selection == "Euler Method"
+            state.solver[] = EulerSolver()
+        elseif selection == "Velocity Verlet"
+            state.solver[] = VelocityVerletSolver()
+        end
+    end
+
+    Label(grid[4,1], "Show Gravitational Potential", halign=:right, tellwidth=false)
+    toggle_wireframe = Toggle(grid[4,2], active=true, halign=:left, tellwidth=false)
+
+    Label(grid[5,1], "Wireframe scale", halign=:right, tellwidth=false)
+    sl_wireframe = Slider(grid[5,2], range=0.1f0:0.1:2.5f0, startvalue=1, snap=true, width=100, halign=:left, tellwidth=false)
 
     return UIElements(toggle_wireframe, sl_wireframe)
 end

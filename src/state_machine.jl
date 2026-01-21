@@ -1,6 +1,6 @@
 module StateMachine
     
-using ..Simulator: PhysicsBody, recompute_trajectories!, EulerSolver, VelocityVerletSolver
+using ..Simulator: PhysicsBody, AbstractSolver, recompute_trajectories!, EulerSolver, VelocityVerletSolver, reset!
 
 using StaticArrays
 
@@ -19,6 +19,8 @@ mutable struct AppState
     selected_body_index::Observable{Int}
     centered_body_index::Observable{Int}
 
+    solver::Observable{AbstractSolver}
+
     dt::Float32
     frame::UInt64
 
@@ -31,7 +33,9 @@ mutable struct AppState
         s_idx = Observable(0)
         c_idx = Observable(0)
 
-        state = new(_playing, _bodies, _trails, _trajectories, s_idx, c_idx, dt, 0)
+        _solver = Observable{AbstractSolver}(VelocityVerletSolver())
+
+        state = new(_playing, _bodies, _trails, _trajectories, s_idx, c_idx, _solver, dt, 0)
 
         prepare_listeners!(state)
         return state
@@ -49,7 +53,7 @@ function prepare_listeners!(state::AppState)
         new_trails = [Point3f[] for _ in 1:length(state.bodies[])]
         state.trails[] = new_trails
 
-        recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt, solver=VelocityVerletSolver())
+        recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt, solver=state.solver[])
         notify(state.trajectories)
 
         for t in state.trails[]; empty!(t); end
@@ -62,11 +66,19 @@ function prepare_listeners!(state::AppState)
             for t in state.trajectories[]; empty!(t); end
             notify(state.trajectories)
         else
-            recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt, solver=VelocityVerletSolver())
+            recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt, solver=state.solver[])
             notify(state.trajectories)
         end
     end
 
+    on(state.solver) do solver
+        state.playing[] = false
+        reset!(state.bodies[])
+        notify(state.bodies)
+
+        recompute_trajectories!(state.bodies[], state.trajectories[]; dt=state.dt, solver=solver)
+        notify(state.trajectories)
+    end
 end
 
 end
