@@ -4,7 +4,7 @@ using GLMakie
 using Colors
 using StaticArrays
 
-using ..Simulator: PhysicsBody, reset!, EulerSolver, VelocityVerletSolver
+using ..Simulator: PhysicsBody, reset!, EulerSolver, VelocityVerletSolver, RK4Solver
 using ..StateMachine: AppState
 using ..Serializer: save_scenario, load_scenario_dialog
 
@@ -43,8 +43,8 @@ function _panel_body_inspector(inspector_grid::GridLayout, state::AppState, swat
     inspector_grid.halign = :left
 
     Label(inspector_grid[1, 1], "Pos (X/Y):", color=:white)
-    sl_xpos = Slider(inspector_grid[1, 2], range=-100.0f0:0.1f0:100.0f0, width=250)
-    sl_ypos = Slider(inspector_grid[1, 3], range=-100.0f0:0.1f0:100.0f0, width=250)
+    sl_xpos = Slider(inspector_grid[1, 2], range=-150.0f0:0.1f0:150.0f0, width=250)
+    sl_ypos = Slider(inspector_grid[1, 3], range=-150.0f0:0.1f0:150.0f0, width=250)
 
     Label(inspector_grid[2, 1], "Vel (X/Y):", color=:white)
     sl_xvel = Slider(inspector_grid[2, 2], range=-50.0f0:0.1f0:50.0f0, width=250)
@@ -187,7 +187,7 @@ function _panel_sim_inspector(sim_grid::GridLayout, state::AppState)
     """
     Panel creating helper
     """
-    solver_opts = ["Euler Method", "Velocity Verlet"]
+    solver_opts = ["Euler Method", "Velocity Verlet", "RK4"]
 
     Label(sim_grid[1, 1], "Scenarios", color=:white)
     btn_grid = GridLayout(tellwidth=false, halign=:center)
@@ -231,6 +231,8 @@ function _panel_sim_inspector(sim_grid::GridLayout, state::AppState)
             state.solver[] = EulerSolver()
         elseif selection == "Velocity Verlet"
             state.solver[] = VelocityVerletSolver()
+        elseif selection == "RK4"
+            state.solver[] = RK4Solver()
         end
     end
 
